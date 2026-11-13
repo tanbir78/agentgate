@@ -1,14 +1,23 @@
 spring:
   application:
     name: agentgate
+  mvc:
+    problemdetails:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/agentgate}
     username: ${DB_USER:agentgate}
-    password: ${DB_PASSWORD}          # required, no default (C2)
+    password: ${DB_PASSWORD}
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate              # schema owned by Flyway only
+      ddl-auto: validate
+  flyway:
+    enabled: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -16,8 +25,22 @@ spring:
   threads:
     virtual:
       enabled: true
+  ai:
+    mcp:
+      server:
+        name: agentgate
+        version: 0.2.0
+        type: SYNC
+        protocol: STREAMABLE
+        annotation-scanner:
+          enabled: true
+      client:
+        enabled: true
+        name: agentgate-downstream-client
+        type: SYNC
+        request-timeout: 10s
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   error:
     include-message: never
     include-stacktrace: never
@@ -30,15 +53,22 @@ management:
     health:
       probes:
         enabled: true
-      show-details: when-authorized
+      show-details: never
   tracing:
     sampling:
-      probability: 1.0
+      probability: ${TRACING_SAMPLING:0.1}
 logging:
   structured:
     format:
-      console: ecs                    # structured JSON logs (C4)
+      console: ecs
 agentgate:
-  audit-checkpoint-secret: ${AUDIT_CHECKPOINT_SECRET}   # required
-  policy-refresh-seconds: 5            # <= 10 s activation bound (FR3)
+  audit-checkpoint-secret: ${AUDIT_CHECKPOINT_SECRET}
+  jwt-private-key-base64: ${JWT_PRIVATE_KEY_BASE64}
+  jwt-public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
+  delegation-signing-secret: ${DELEGATION_SIGNING_SECRET}
+  issuer: ${AGENTGATE_ISSUER:http://localhost:8080}
+  admin-username: ${ADMIN_USERNAME:admin}
+  admin-password: ${ADMIN_PASSWORD}
+  policy-refresh-seconds: 5
   approval-default-expiry-minutes: 30
+  access-token-minutes: 15

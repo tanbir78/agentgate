@@ -1,14 +1,14 @@
 # Requirement Traceability Matrix (RTM)
 
 Status vocabulary: COMPLETED / PARTIALLY COMPLETED / NOT COMPLETED.
-Nothing is COMPLETED without evidence. Current state: scaffold only, so all implementation items are NOT COMPLETED.
+Nothing is COMPLETED without evidence. Current state: initial implementation exists for parts of FR1 and FR2; FR3–FR10 remain unimplemented. Test execution is blocked in this environment.
 
 ## Functional requirements
 
-| ID | Requirement | Module(s) | Key classes (planned) | Persistence | Test (planned) | Stage | Status |
+| ID | Requirement | Module(s) | Key classes (implemented / planned) | Persistence | Test (planned) | Stage | Status |
 |----|-------------|-----------|----------------------|-------------|----------------|-------|--------|
-| FR1 | Tool registry: CRUD, search, pagination, REST + MCP servers, OpenAPI import, risk level, owner team, input schema, health, MCP discovery | registry, health | ToolService, OpenApiImporter, ToolServerAdapter (REST/MCP), McpDiscoveryServer | tool, tool_server, team | ToolRegistryIT, McpDiscoveryIT, OpenApiImportTest | 5 | NOT COMPLETED |
-| FR2 | Agent identity: registration, (de)activation, OAuth2 client-credentials, hashed secrets, JWT validation, optional end-user, delegation validation | identity | AgentService, ClientSecretHasher, DelegationValidator, JwtAgentConverter | agent, agent_credential | AgentAuthIT, DelegationTest | 4 | NOT COMPLETED |
+| FR1 | Tool registry: CRUD, search, pagination, REST + MCP servers, OpenAPI import, risk level, owner team, input schema, health, MCP discovery | registry, health | ToolService, OpenApiImporter, ToolServerService, RestToolAdapter, McpToolAdapter, AgentGateMcpTools | tools, tool_servers | ToolSchemaValidatorTest (not executed) | 5 | PARTIALLY COMPLETED |
+| FR2 | Agent identity: registration, (de)activation, OAuth2 client-credentials, hashed secrets, JWT validation, optional end-user, delegation validation | identity | AgentService, AgentRegisteredClientRepository, AgentTokenCustomizer, DelegationIdentityResolver, IdentitySecurityConfiguration | agents | AgentSecretGenerationTest, DelegationIdentityResolverTest (not executed) | 4 | PARTIALLY COMPLETED |
 | FR3 | Policy engine: CRUD, versioning, activate/deactivate, conditions (agent/tool/arg/user), ALLOW/DENY/APPROVAL_REQUIRED, default deny, dry-run, refresh <= 10 s | policy | PolicyEvaluator, ConditionStrategy, PolicyAuthorizationManager, PolicySnapshotCache | policy, policy_version | PolicyEvaluatorTest, PolicyRefreshIT | 7 | NOT COMPLETED |
 | FR4 | Human approval: lifecycle, assignment, approve/reject/edit-and-approve, expiry auto-reject, web + webhook notification, history, duplicate/concurrent decision protection, kill-switch cancel | approval, notification | ApprovalStateMachine, ApprovalCommand, ApprovalExpiryJob, WebhookNotifier | approval, approval_history, notification | ApprovalLifecycleIT, ConcurrentDecisionIT | 9 | NOT COMPLETED |
 | FR5 | Guard pipeline: input (schema, missing, invalid, constraints), output (email, BD phone, NID, clearance, size limit, truncation notice); new guard = new bean | guard | Guard, InputGuard, OutputGuard, GuardChain, *Redactor | none | GuardChainTest, NewGuardExtensibilityTest | 8 | NOT COMPLETED |
@@ -22,26 +22,26 @@ Nothing is COMPLETED without evidence. Current state: scaffold only, so all impl
 
 | ID | Scenario (as summarised in the master prompt) | Mechanism | Test / script | Stage | Status |
 |----|------|-----------|---------------|-------|--------|
-| QA1 | 30 malicious + 200 legitimate calls: no malicious call reaches downstream, legitimate calls served | Default deny, policy, guards; downstream call counter in test double | tests/security, run-security-tests.sh | 17 | NOT COMPLETED |
-| QA2 | 100 RPS, gateway-added p95 overhead <= 30 ms | Policy snapshot cache, Redis Lua limiter, minimal hops, batched audit hashing | tests/performance (k6), run-performance-tests.sh | 17 | NOT COMPLETED |
-| QA3 | Audit investigation < 1 min; tampering detected | Indexed search, hash chain, verify script | tests/audit, verify-audit.sh | 11/17 | NOT COMPLETED |
-| QA4 | Policy store failure -> last-known policy behaviour | Last-known-good snapshot, risk-based fail-safe | tests/availability | 7/17 | NOT COMPLETED |
-| QA5 | New REST tool onboarded < 10 min, no code change | OpenAPI import + generic REST adapter | tests/adoption, run-adoption-test.sh | 5/17 | NOT COMPLETED |
+| QA1 | 30 scripted malicious calls: 100% blocked or held for approval; <=5% of 200 legitimate calls wrongly blocked | Default deny, policy, guards; downstream call counter in test double | tests/security, run-security-tests.sh | 17 | NOT COMPLETED |
+| QA2 | At 100 calls/second, gateway-added latency <=30 ms at p95, excluding approval waits | Policy snapshot cache, Redis Lua limiter, minimal hops, batched audit hashing | tests/performance (k6), run-performance-tests.sh | 17 | NOT COMPLETED |
+| QA3 | Auditor finds actor, behalf-of user, action and allowing rule in <1 minute; verify command detects edited audit rows | Indexed search, hash chain, verify script | tests/audit, verify-audit.sh | 11/17 | NOT COMPLETED |
+| QA4 | Policy store unreachable: MEDIUM/HIGH fail closed; LOW uses last-known policy for <=5 minutes, then fails closed | Last-known-good snapshot, risk-based fail-safe | tests/availability | 7/17 | NOT COMPLETED |
+| QA5 | Unfamiliar developer imports a REST tool, sets risk and policy in <10 minutes without code changes | OpenAPI import + generic REST adapter + policy UI | tests/adoption, run-adoption-test.sh | 5/17 | NOT COMPLETED |
 
-NOTE: I only have the QA/C wording as summarised in the master prompt. Please paste the exact wording from the course spec so thresholds are never reinterpreted.
+NOTE: The full QA thresholds from the course specification remain unchanged; no QA evidence has been generated yet.
 
 ## Common requirements
 
 | ID | Requirement | Where | Evidence (planned) | Stage | Status |
 |----|-------------|-------|--------------------|-------|--------|
-| C1 | Java 21/25, Boot 4.x, Maven, Compose, one-command start | pom.xml, docker-compose.yml | `docker compose up --build` log | 3/19 | NOT COMPLETED |
-| C2 | Profiles, env vars, typed config + validation, no committed secrets | @ConfigurationProperties, .env.example, .gitignore | startup-fails-without-secret test | 3 | NOT COMPLETED |
-| C3 | springdoc, Security, Bean Validation, RFC 9457, pagination | all presentation layers | OpenAPI JSON, ProblemDetail tests | 4-13 | NOT COMPLETED |
-| C4 | Actuator, readiness, Micrometer, tracing, JSON logs, trace-ID propagation | common | /actuator output, log sample | 3 | NOT COMPLETED |
-| C5 | JUnit 5, slice tests, Testcontainers, k6, CI | backend/src/test, .github/workflows | CI run | 17 | NOT COMPLETED |
-| C6 | ArchUnit / Modulith architecture verification | ArchitectureTest | passing test | 3 | NOT COMPLETED (test written, not yet run) |
+| C1 | Java 21/25, Boot 4.x, Maven, Compose, one-command start | pom.xml, mvnw, Dockerfile, docker-compose.yml | Maven and Compose commands not executable in current environment | 3/19 | PARTIALLY COMPLETED |
+| C2 | Profiles, env vars, typed config + validation, no committed secrets | @ConfigurationProperties, .env.example, .gitignore | Static inspection only; profile-specific configs and startup test pending | 3 | PARTIALLY COMPLETED |
+| C3 | springdoc, Security, Bean Validation, RFC 9457, pagination | agent/tool/tool-server APIs and security handlers | Static inspection only; runtime OpenAPI and ProblemDetail tests pending | 4-13 | PARTIALLY COMPLETED |
+| C4 | Actuator, readiness, Micrometer, tracing, JSON logs, trace-ID propagation | application.yml | Configuration added; actuator/log output not captured | 3 | PARTIALLY COMPLETED |
+| C5 | JUnit 5, slice tests, Testcontainers, k6, CI | unit tests and CI config added; integration/QA scripts pending | Tests not run: Maven unavailable | 17 | PARTIALLY COMPLETED |
+| C6 | ArchUnit / Modulith architecture verification | ArchitectureTest | Test written; not run because Maven is unavailable | 3 | PARTIALLY COMPLETED |
 | C7 | C4 diagrams, >= 4 ADRs, utility tree >= 6 scenarios, mini-ATAM | docs/architecture, docs/adr | files | 1-2 | PARTIALLY COMPLETED (drafted, awaiting your review) |
-| C8 | Pattern justification table | docs/design-patterns | doc | 18 | NOT COMPLETED |
+| C8 | Pattern justification table | docs/design-patterns/pattern-justification.md | Table covers implemented patterns; future patterns pending | 18 | PARTIALLY COMPLETED |
 | C9 | Evidence report: raw results, charts, failures, fixes | docs/testing | generated from real runs | 18 | NOT COMPLETED |
 | C10 | Instructor change request | extensible modules | pending instructor | 19+ | NOT COMPLETED |
 | C11 | Incremental Git history, honest AI log | .git, docs/process/ai-usage-log.md | git log | all | PARTIALLY COMPLETED (log started) |

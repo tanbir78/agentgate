@@ -1,11 +1,18 @@
 FROM eclipse-temurin:21-jdk AS build
-WORKDIR /src
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
 COPY . .
-RUN ./mvnw -q -DskipTests package
+RUN chmod +x ./mvnw && ./mvnw -B -DskipTests package
+
 FROM eclipse-temurin:21-jre
-RUN useradd -r -u 1001 app && apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+RUN useradd --system --uid 10001 --create-home agentgate \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /src/target/agentgate-*.jar app.jar
-USER app
+COPY --from=build /workspace/target/agentgate-*.jar /app/agentgate.jar
+USER agentgate
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=70", "-jar", "/app/agentgate.jar"]

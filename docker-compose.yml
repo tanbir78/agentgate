@@ -4,14 +4,16 @@ services:
     environment:
       POSTGRES_DB: agentgate
       POSTGRES_USER: agentgate
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-    volumes: [pgdata:/var/lib/postgresql/data]
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agentgate -d agentgate"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 15
     mem_limit: 384m
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--maxmemory", "64mb", "--appendonly", "yes"]
@@ -19,28 +21,38 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 15
     mem_limit: 128m
+
   backend:
     build: ./backend
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/agentgate
       DB_USER: agentgate
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       REDIS_HOST: redis
-      AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?set AUDIT_CHECKPOINT_SECRET in .env}
+      AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?Set AUDIT_CHECKPOINT_SECRET in .env}
+      JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64:?Set JWT_PRIVATE_KEY_BASE64 in .env}
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?Set JWT_PUBLIC_KEY_BASE64 in .env}
+      DELEGATION_SIGNING_SECRET: ${DELEGATION_SIGNING_SECRET:?Set DELEGATION_SIGNING_SECRET in .env}
+      AGENTGATE_ISSUER: ${AGENTGATE_ISSUER:-http://localhost:8080}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       JAVA_TOOL_OPTIONS: -Xmx512m
     depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
-    ports: ["8080:8080"]
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 40s
+      start_period: 45s
     mem_limit: 768m
-  # frontend service is added in Stage 15 (no frontend code exists yet)
+
 volumes:
   pgdata:

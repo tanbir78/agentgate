@@ -29,6 +29,11 @@ class ArchitectureTest {
                     .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
 
     @ArchTest
+    static final ArchRule application_does_not_depend_on_infrastructure =
+            noClasses().that().resideInAPackage("..application..")
+                    .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
+
+    @ArchTest
     static final ArchRule domain_is_framework_light =
             noClasses().that().resideInAPackage("..domain..")
                     .should().dependOnClassesThat().resideInAPackage("..presentation..");

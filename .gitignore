@@ -9,3 +9,8 @@ dist/
 *.log
 audit-checkpoints/
 test-results/raw/
+
+# Generated Maven Wrapper bootstrap JAR and signing material
+backend/.mvn/wrapper/maven-wrapper.jar
+*.p12
+*.jks

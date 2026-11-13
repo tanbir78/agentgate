@@ -3,19 +3,19 @@
 ## Ambiguities to resolve (need your answer or an assumption)
 | # | Ambiguity | Working assumption | Decide by |
 |---|-----------|--------------------|-----------|
-| A1 | Exact QA/C wording not in the prompt | Use prompt's summary; you supply original text | Now |
-| A2 | Who issues JWTs: the gateway itself or an external IdP? | Gateway embeds Spring Authorization Server (local, free) for agents; admins log in via the same server (ADR-003) | Stage 4 gate |
-| A3 | "Clearance" of an agent: where does it live? | Stored on agent record, copied into JWT claim only by the server; never read from agent-supplied args | Stage 4 |
-| A4 | Delegation model (agent acting for user) | Agent sends a signed end-user token / user id; gateway verifies the agent is permitted to delegate for that user (RFC 8693-style `act` semantic, simplified) | Stage 4 gate |
-| A5 | How agents call tools: MCP only, or REST too? | Gateway exposes ONE MCP server endpoint (tools/list, tools/call) to agents; downstream tools are REST or MCP | Stage 5 |
+| A1 | QA/C thresholds | Exact QA1–QA5 and C1–C12 wording is available in the course specification; preserve the stated thresholds verbatim | Resolved |
+| A2 | Who issues JWTs: the gateway itself or an external IdP? | AgentGate embeds Spring Authorization Server for agent clients; admin bootstrap uses local HTTP Basic for this course build (ADR-003) | Resolved |
+| A3 | "Clearance" of an agent: where does it live? | Stored on agent record, copied into JWT claim only by the server; never read from agent-supplied args | Resolved in Stage 4 |
+| A4 | Delegation model (agent acting for user) | A trusted upstream broker signs `agentClientId:endUserId` using HMAC-SHA256; AgentGate verifies the signature. Policy authorization of that delegated identity is pending FR3 | Partially resolved |
+| A5 | How agents call tools: MCP only, or REST too? | Gateway exposes one Spring AI MCP Streamable HTTP endpoint; downstream adapters support REST and MCP. Fine-grained discovery remains policy-dependent | Partially resolved in Stage 5 |
 | A6 | APPROVAL_REQUIRED call semantics: block or async? | Return MCP result "pending approval" with approvalId; approved call executes server-side; agent can poll | Stage 9 gate |
-| A7 | Fail-safe per risk level when infra is down | LOW: read ok from last-known policy; MEDIUM: last-known policy, writes denied; HIGH: deny (ADR-004) | Stage 7 gate |
-| A8 | Spring Boot 4.x + Spring AI MCP compatibility | Must be verified from official docs/BOM when network is available | Stage 3 |
+| A7 | Fail-safe per risk level when infra is down | LOW: last-known policy for at most five minutes; MEDIUM/HIGH: fail closed immediately; LOW also fails closed after five minutes (ADR-004) | Stage 7 gate |
+| A8 | Spring Boot 4.x + Spring AI MCP compatibility | Selected Boot 4.1.2 + Spring AI 2.0.2 + springdoc 3.2.0 from official compatibility documentation; Maven resolution/build still pending | Partially resolved |
 
 ## Technical risks
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|------|-----------|--------|------------|
-| R1 | Boot 4.x / Spring AI / Modulith / springdoc / Testcontainers version mismatch (Boot 4 modularised starters and moved packages) | High | High | Pin via BOMs, run `scripts/verify-deps.sh` first; fall back to latest compatible Boot 4.0.x |
+| R1 | Boot 4.x / Spring AI / springdoc / Testcontainers version mismatch (Boot 4 modularised starters and moved packages) | Med | High | Pin via Boot/Spring AI BOMs, use springdoc 3.2.x for Boot 4.1.x, run `scripts/verify-deps.sh` |
 | R2 | MCP support is young; server-side proxying of tools/call with per-request auth | Med | High | Isolate behind `ToolTransport` adapter; MCP-over-HTTP (streamable) first |
 | R3 | QA2 (p95 <= 30 ms overhead) with audit hash chain serialising writes | Med | High | Per-chain advisory lock, hash computed in-process, measure overhead separately from downstream latency |
 | R4 | Audit chain "tamper-proof" overclaim | Med | Med | Document limits; periodic signed checkpoint exported outside DB (ADR-005) |
