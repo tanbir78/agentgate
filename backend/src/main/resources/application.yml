@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: agentgate
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/agentgate}
+    username: ${DB_USER:agentgate}
+    password: ${DB_PASSWORD}          # required, no default (C2)
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate              # schema owned by Flyway only
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  threads:
+    virtual:
+      enabled: true
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  tracing:
+    sampling:
+      probability: 1.0
+logging:
+  structured:
+    format:
+      console: ecs                    # structured JSON logs (C4)
+agentgate:
+  audit-checkpoint-secret: ${AUDIT_CHECKPOINT_SECRET}   # required
+  policy-refresh-seconds: 5            # <= 10 s activation bound (FR3)
+  approval-default-expiry-minutes: 30
