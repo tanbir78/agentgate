@@ -1,4 +1,4 @@
-﻿
+
 package com.agentgate.policy;
 
 import com.agentgate.identity.application.AgentStore;
