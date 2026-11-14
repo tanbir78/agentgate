@@ -1,0 +1,139 @@
+
+package com.agentgate.policy.application;
+
+import com.agentgate.identity.application.AgentStore;
+import com.agentgate.policy.domain.Policy;
+import com.agentgate.policy.domain.PolicyRule;
+import com.agentgate.registry.domain.ToolDefinition;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+
+@Component
+public class DatabasePolicyDecisionProvider
+        implements PolicyDecisionProvider {
+
+    private static final String DEFAULT_DENY = "DEFAULT_DENY";
+
+    private final AgentStore agentStore;
+    private final PolicyStore policyStore;
+    private final PolicyRuleStore ruleStore;
+
+    public DatabasePolicyDecisionProvider(
+            AgentStore agentStore,
+            PolicyStore policyStore,
+            PolicyRuleStore ruleStore) {
+
+        this.agentStore = agentStore;
+        this.policyStore = policyStore;
+        this.ruleStore = ruleStore;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PolicyDecision evaluate(
+            String agentClientId,
+            String endUserId,
+            ToolDefinition tool,
+            Map<String, Object> arguments) {
+
+        if (agentClientId == null || tool == null
+                || tool.getId() == null || !tool.isActive()) {
+            return deny(DEFAULT_DENY,
+                    "Invalid agent or inactive tool.");
+        }
+
+        var agent = agentStore.findByClientId(agentClientId)
+                .filter(a -> a.isActive());
+
+        if (agent.isEmpty()) {
+            return deny(DEFAULT_DENY,
+                    "Agent is not active or does not exist.");
+        }
+
+        var agentId = agent.get().getId();
+        var toolId = tool.getId();
+
+        if (agentId == null) {
+            return deny(DEFAULT_DENY,
+                    "Agent identity could not be resolved.");
+        }
+
+        List<Policy> activePolicies =
+                policyStore.findAllActivePolicies();
+
+        List<PolicyRule> matchingRules = activePolicies.stream()
+                .flatMap(policy ->
+                        ruleStore.findEnabledByPolicyId(policy.getId())
+                                .stream())
+                .filter(rule ->
+                        agentId.equals(rule.getAgentId())
+                        && toolId.equals(rule.getToolId()))
+                .sorted(
+                        Comparator.comparingInt(PolicyRule::getPriority)
+                                .thenComparing(PolicyRule::getCreatedAt)
+                                .thenComparing(rule ->
+                                        rule.getId().toString())
+                )
+                .toList();
+
+        for (PolicyRule rule : matchingRules) {
+
+            // Unknown condition formats must never grant access.
+            if (rule.getConditions() != null
+                    && !rule.getConditions().isEmpty()) {
+                continue;
+            }
+
+            return switch (rule.getEffect()) {
+                case ALLOW -> new PolicyDecision(
+                        Decision.ALLOW,
+                        rule.getId().toString(),
+                        "Access allowed by active policy rule."
+                );
+
+                case DENY -> new PolicyDecision(
+                        Decision.DENY,
+                        rule.getId().toString(),
+                        "Access denied by active policy rule."
+                );
+
+                case APPROVAL_REQUIRED -> new PolicyDecision(
+                        Decision.APPROVAL_REQUIRED,
+                        rule.getId().toString(),
+                        "This operation requires approval."
+                );
+            };
+        }
+
+        return deny(DEFAULT_DENY,
+                "No active policy rule authorizes this call.");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean canDiscover(
+            String agentClientId,
+            ToolDefinition tool) {
+
+        PolicyDecision decision = evaluate(
+                agentClientId,
+                null,
+                tool,
+                Map.of()
+        );
+
+        return decision.decision() == Decision.ALLOW;
+    }
+
+    private PolicyDecision deny(String ruleId, String explanation) {
+        return new PolicyDecision(
+                Decision.DENY,
+                ruleId,
+                explanation
+        );
+    }
+}
