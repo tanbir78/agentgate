@@ -21,6 +21,7 @@ public class DatabasePolicyDecisionProvider
     private final AgentStore agentStore;
     private final PolicyStore policyStore;
     private final PolicyRuleStore ruleStore;
+    private final PolicyConditionEvaluator conditionEvaluator = new PolicyConditionEvaluator();
 
     public DatabasePolicyDecisionProvider(
             AgentStore agentStore,
@@ -74,17 +75,20 @@ public class DatabasePolicyDecisionProvider
                         && toolId.equals(rule.getToolId()))
                 .sorted(
                         Comparator.comparingInt(PolicyRule::getPriority)
+                                .thenComparingInt(rule -> switch (rule.getEffect()) {
+                                    case DENY -> 0;
+                                    case APPROVAL_REQUIRED -> 1;
+                                    case ALLOW -> 2;
+                                })
                                 .thenComparing(PolicyRule::getCreatedAt)
-                                .thenComparing(rule ->
-                                        rule.getId().toString())
+                                .thenComparing(rule -> rule.getId().toString())
                 )
                 .toList();
 
         for (PolicyRule rule : matchingRules) {
 
-            // Unknown condition formats must never grant access.
-            if (rule.getConditions() != null
-                    && !rule.getConditions().isEmpty()) {
+            // All conditions must match; malformed or unknown conditions fail closed.
+            if (!conditionEvaluator.matches(rule.getConditions(), arguments)) {
                 continue;
             }
 
@@ -126,7 +130,8 @@ public class DatabasePolicyDecisionProvider
                 Map.of()
         );
 
-        return decision.decision() == Decision.ALLOW;
+        return decision.decision() == Decision.ALLOW
+                || decision.decision() == Decision.APPROVAL_REQUIRED;
     }
 
     private PolicyDecision deny(String ruleId, String explanation) {

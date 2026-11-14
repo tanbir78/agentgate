@@ -29,10 +29,22 @@ public class AgentGateMcpTools {
     }
 
     private String currentAgentClientId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new IllegalStateException("Authenticated agent context is missing");
-        }
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+    if (authentication == null || !authentication.isAuthenticated()) {
+        System.out.println("[MCP-DIAG] Authentication is missing or unauthenticated");
+        throw new IllegalStateException("Authenticated agent context is missing");
+    }
+
+    System.out.println("[MCP-DIAG] Authentication type: "
+            + authentication.getClass().getName());
+
+    System.out.println("[MCP-DIAG] Principal name: "
+            + authentication.getName());
+
+    System.out.println("[MCP-DIAG] Authorities: "
+            + authentication.getAuthorities());
+
         return authentication.getName();
     }
 }

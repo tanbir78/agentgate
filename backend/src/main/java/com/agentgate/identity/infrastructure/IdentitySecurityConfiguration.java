@@ -157,7 +157,9 @@ KeyPair jwtKeyPair(AgentGateProperties properties) {
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                 .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth.anyRequest().hasRole("ADMIN"))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/v1/approvals/**").hasRole("APPROVER")
+                .anyRequest().hasRole("ADMIN"))
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(authenticationEntryPoint)
                 .accessDeniedHandler(accessDeniedHandler))

@@ -1,5 +1,8 @@
 package com.agentgate.gateway.application;
 
+import com.agentgate.approval.application.ApprovalService;
+import com.agentgate.audit.application.AuditService;
+
 import com.agentgate.identity.application.AgentService;
 import com.agentgate.policy.application.PolicyDecisionProvider;
 import com.agentgate.identity.application.DelegationIdentityResolver;
@@ -17,14 +20,18 @@ import java.util.UUID;
 @Service
 public class ToolExecutionService {
     private final AgentService agentService;
+    private final ApprovalService approvalService;
+    private final AuditService auditService;
     private final DelegationIdentityResolver delegationIdentityResolver;
     private final ToolService toolService;
     private final PolicyDecisionProvider policyDecisionProvider;
     private final List<ToolExecutor> executors;
 
-    public ToolExecutionService(AgentService agentService, DelegationIdentityResolver delegationIdentityResolver,
+    public ToolExecutionService(AgentService agentService, ApprovalService approvalService, AuditService auditService, DelegationIdentityResolver delegationIdentityResolver,
                                 ToolService toolService, PolicyDecisionProvider policyDecisionProvider, List<ToolExecutor> executors) {
         this.agentService = agentService;
+        this.approvalService = approvalService;
+        this.auditService = auditService;
         this.delegationIdentityResolver = delegationIdentityResolver;
         this.toolService = toolService;
         this.policyDecisionProvider = policyDecisionProvider;
@@ -33,7 +40,7 @@ public class ToolExecutionService {
 
     public InvocationResult invoke(String agentClientId, String toolName, Map<String, Object> arguments,
                                   String endUserId, String delegationSignature) {
-        agentService.requireActiveByClientId(agentClientId);
+        var agent = agentService.requireActiveByClientId(agentClientId);
         String verifiedEndUserId = delegationIdentityResolver.resolve(agentClientId, endUserId, delegationSignature).orElse(null);
         ToolDefinition tool;
         try {
@@ -51,7 +58,49 @@ public class ToolExecutionService {
         }
         toolService.validateArguments(tool, arguments);
         PolicyDecisionProvider.PolicyDecision decision = policyDecisionProvider.evaluate(agentClientId, verifiedEndUserId, tool, arguments);
+        if (decision.decision() == PolicyDecisionProvider.Decision.APPROVAL_REQUIRED) {
+            UUID ruleId;
+            try {
+                ruleId = UUID.fromString(decision.ruleId());
+            } catch (RuntimeException exception) {
+                throw new IllegalStateException("Approval policy returned an invalid rule ID.", exception);
+            }
+
+            var approval = approvalService.create(
+                    agent.getId(), tool.getId(), ruleId,
+                    verifiedEndUserId, arguments);
+
+            String auditActor = verifiedEndUserId != null
+                    ? verifiedEndUserId
+                    : agentClientId;
+
+            auditService.record(
+                    auditActor,
+                    agent.getId(),
+                    tool.getId(),
+                    "APPROVAL_REQUIRED",
+                    decision.ruleId(),
+                    "Approval request created: " + approval.id()
+            );
+
+            return new InvocationResult(
+                    "APPROVAL_REQUIRED", toolName, decision.ruleId(),
+                    "Approval request created: " + approval.id(), null);
+        }
+
         if (decision.decision() != PolicyDecisionProvider.Decision.ALLOW) {
+            String auditActor = verifiedEndUserId != null
+                    ? verifiedEndUserId
+                    : agentClientId;
+
+            auditService.record(
+                    auditActor,
+                    agent.getId(),
+                    tool.getId(),
+                    decision.decision().name(),
+                    decision.ruleId(),
+                    decision.explanation()
+            );
             return new InvocationResult(decision.decision().name(), toolName, decision.ruleId(),
                     decision.explanation(), null);
         }
@@ -59,12 +108,13 @@ public class ToolExecutionService {
                 .findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED,
                         "No adapter is registered for " + tool.getTransportType()));
         JsonNode result = executor.invoke(tool, arguments);
+        auditService.record(verifiedEndUserId, agent.getId(), tool.getId(), "ALLOW", decision.ruleId(), "Tool call completed");
         return new InvocationResult("ALLOW", toolName, decision.ruleId(), "Tool call completed", result);
     }
 
     public List<Map<String, Object>> discover(String agentClientId) {
         // Only active agents may discover tools.
-        agentService.requireActiveByClientId(agentClientId);
+        var agent = agentService.requireActiveByClientId(agentClientId);
 
         // Keep domain entities inside the application layer so policy checks
         // receive ToolDefinition rather than the API-facing ToolResponse DTO.
