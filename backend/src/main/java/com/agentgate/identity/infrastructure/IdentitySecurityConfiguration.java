@@ -33,7 +33,6 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 
-import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -58,25 +57,40 @@ public class IdentitySecurityConfiguration {
                 .build());
     }
 
-    /** Loads a persistent RSA key pair from base64-encoded PEM environment variables. */
-    @Bean
-    KeyPair jwtKeyPair(AgentGateProperties properties) {
-        try {
-            String privatePem = new String(Base64.getDecoder().decode(properties.jwtPrivateKeyBase64()), StandardCharsets.UTF_8);
-            String publicPem = new String(Base64.getDecoder().decode(properties.jwtPublicKeyBase64()), StandardCharsets.UTF_8);
-            byte[] privateDer = decodePem(privatePem, "PRIVATE KEY");
-            byte[] publicDer = decodePem(publicPem, "PUBLIC KEY");
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            RSAPrivateKey privateKey = (RSAPrivateKey) keyFactory.generatePrivate(new PKCS8EncodedKeySpec(privateDer));
-            RSAPublicKey publicKey = (RSAPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(publicDer));
-            if (!privateKey.getModulus().equals(publicKey.getModulus()) || publicKey.getModulus().bitLength() < 2048) {
-                throw new IllegalArgumentException("RSA keys do not match or are smaller than 2048 bits");
-            }
-            return new KeyPair(publicKey, privateKey);
-        } catch (Exception exception) {
-            throw new IllegalStateException("JWT RSA key configuration is invalid. Check JWT_PRIVATE_KEY_BASE64 and JWT_PUBLIC_KEY_BASE64.", exception);
+
+/** Loads a persistent RSA key pair from base64-encoded DER environment variables. */
+@Bean
+KeyPair jwtKeyPair(AgentGateProperties properties) {
+    try {
+        byte[] privateDer = Base64.getDecoder()
+                .decode(properties.jwtPrivateKeyBase64());
+
+        byte[] publicDer = Base64.getDecoder()
+                .decode(properties.jwtPublicKeyBase64());
+
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+
+        RSAPrivateKey privateKey = (RSAPrivateKey) keyFactory.generatePrivate(
+                new PKCS8EncodedKeySpec(privateDer));
+
+        RSAPublicKey publicKey = (RSAPublicKey) keyFactory.generatePublic(
+                new X509EncodedKeySpec(publicDer));
+
+        if (!privateKey.getModulus().equals(publicKey.getModulus())
+                || publicKey.getModulus().bitLength() < 2048) {
+            throw new IllegalArgumentException(
+                    "RSA keys do not match or are smaller than 2048 bits");
         }
+
+        return new KeyPair(publicKey, privateKey);
+
+    } catch (Exception exception) {
+        throw new IllegalStateException(
+                "JWT RSA key configuration is invalid. Check JWT_PRIVATE_KEY_BASE64 and JWT_PUBLIC_KEY_BASE64.",
+                exception);
     }
+}
+
 
     @Bean
     JWKSource<SecurityContext> jwkSource(KeyPair jwtKeyPair) {
@@ -167,12 +181,5 @@ public class IdentitySecurityConfiguration {
             .httpBasic(Customizer.withDefaults())
             .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()));
         return http.build();
-    }
-
-    private static byte[] decodePem(String pem, String type) {
-        String body = pem.replace("-----BEGIN " + type + "-----", "")
-                .replace("-----END " + type + "-----", "")
-                .replaceAll("\\s", "");
-        return Base64.getDecoder().decode(body);
     }
 }

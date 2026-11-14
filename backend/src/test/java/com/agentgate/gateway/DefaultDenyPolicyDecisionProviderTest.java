@@ -1,7 +1,7 @@
 package com.agentgate.gateway;
 
-import com.agentgate.gateway.application.DefaultDenyPolicyDecisionProvider;
-import com.agentgate.gateway.application.PolicyDecisionProvider;
+import com.agentgate.policy.application.DefaultDenyPolicyDecisionProvider;
+import com.agentgate.policy.application.PolicyDecisionProvider;
 import com.agentgate.registry.domain.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

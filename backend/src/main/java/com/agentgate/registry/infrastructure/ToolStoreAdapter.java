@@ -15,9 +15,11 @@ public class ToolStoreAdapter implements ToolStore {
     public ToolStoreAdapter(ToolRepository repository) { this.repository = repository; }
     @Override public ToolDefinition save(ToolDefinition tool) { return repository.save(tool); }
     @Override public Optional<ToolDefinition> findById(UUID id) { return repository.findById(id); }
+    @Override public Optional<ToolDefinition> findByIdAndActiveTrue(UUID id) { return repository.findByIdAndActiveTrue(id); }
     @Override public Optional<ToolDefinition> findByName(String name) { return repository.findByName(name); }
     @Override public boolean existsByName(String name) { return repository.existsByName(name); }
     @Override public Page<ToolDefinition> findAll(Pageable pageable) { return repository.findAll(pageable); }
     @Override public Page<ToolDefinition> findByActiveTrue(Pageable pageable) { return repository.findByActiveTrue(pageable); }
     @Override public List<ToolDefinition> findByActiveTrueOrderByNameAsc() { return repository.findByActiveTrueOrderByNameAsc(); }
 }
+

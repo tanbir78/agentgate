@@ -10,7 +10,9 @@ import java.util.UUID;
 public interface AgentStore {
     Agent save(Agent agent);
     Optional<Agent> findById(UUID id);
+    Optional<Agent> findByIdAndActiveTrue(UUID id);
     Optional<Agent> findByClientId(String clientId);
     boolean existsByClientId(String clientId);
     Page<Agent> findAll(Pageable pageable);
 }
+

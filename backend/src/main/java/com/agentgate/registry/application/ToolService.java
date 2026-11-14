@@ -52,6 +52,12 @@ public class ToolService {
         return repository.findByActiveTrueOrderByNameAsc().stream().map(this::toResponse).toList();
     }
 
+    /** Returns active domain entities for internal policy and gateway decisions. */
+    @Transactional(readOnly = true)
+    public List<ToolDefinition> listActiveDefinitions() {
+        return repository.findByActiveTrueOrderByNameAsc();
+    }
+
     @Transactional(readOnly = true)
     public ToolDefinition findByName(String name) {
         return repository.findByName(name)

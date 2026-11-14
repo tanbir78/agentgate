@@ -9,8 +9,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ToolRepository extends JpaRepository<ToolDefinition, UUID> {
+    Optional<ToolDefinition> findByIdAndActiveTrue(UUID id);
     Optional<ToolDefinition> findByName(String name);
     boolean existsByName(String name);
     Page<ToolDefinition> findByActiveTrue(Pageable pageable);
     List<ToolDefinition> findByActiveTrueOrderByNameAsc();
 }
+

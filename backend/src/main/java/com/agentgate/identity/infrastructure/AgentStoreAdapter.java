@@ -14,7 +14,9 @@ public class AgentStoreAdapter implements AgentStore {
     public AgentStoreAdapter(AgentRepository repository) { this.repository = repository; }
     @Override public Agent save(Agent agent) { return repository.save(agent); }
     @Override public Optional<Agent> findById(UUID id) { return repository.findById(id); }
+    @Override public Optional<Agent> findByIdAndActiveTrue(UUID id) { return repository.findByIdAndActiveTrue(id); }
     @Override public Optional<Agent> findByClientId(String clientId) { return repository.findByClientId(clientId); }
     @Override public boolean existsByClientId(String clientId) { return repository.existsByClientId(clientId); }
     @Override public Page<Agent> findAll(Pageable pageable) { return repository.findAll(pageable); }
 }
+

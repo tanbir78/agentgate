@@ -157,4 +157,3 @@ docker compose down
 ## Architecture and evidence
 
 See `docs/adr/`, `docs/architecture/`, `docs/requirements/traceability-matrix.md`, and `docs/implementation-guide-stage4-5.md`. Do not treat an unexecuted test or benchmark as evidence of success.
-# agentgate

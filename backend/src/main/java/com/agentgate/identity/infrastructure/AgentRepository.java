@@ -6,6 +6,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface AgentRepository extends JpaRepository<Agent, UUID> {
+    Optional<Agent> findByIdAndActiveTrue(UUID id);
     Optional<Agent> findByClientId(String clientId);
     boolean existsByClientId(String clientId);
 }
+

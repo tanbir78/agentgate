@@ -1,6 +1,7 @@
 package com.agentgate.gateway.application;
 
 import com.agentgate.identity.application.AgentService;
+import com.agentgate.policy.application.PolicyDecisionProvider;
 import com.agentgate.identity.application.DelegationIdentityResolver;
 import com.agentgate.registry.application.ToolExecutor;
 import com.agentgate.registry.application.ToolService;
@@ -62,11 +63,20 @@ public class ToolExecutionService {
     }
 
     public List<Map<String, Object>> discover(String agentClientId) {
+        // Only active agents may discover tools.
         agentService.requireActiveByClientId(agentClientId);
-        return toolService.listActive().stream()
+
+        // Keep domain entities inside the application layer so policy checks
+        // receive ToolDefinition rather than the API-facing ToolResponse DTO.
+        return toolService.listActiveDefinitions().stream()
+                // Apply the same discovery policy to every active tool.
                 .filter(tool -> policyDecisionProvider.canDiscover(agentClientId, tool))
-                .map(tool -> Map.<String, Object>of("name", tool.name(), "description", tool.description(),
-                        "riskLevel", tool.riskLevel().name(), "inputSchema", tool.inputSchema()))
+                // Convert allowed domain entities into the MCP discovery shape.
+                .map(tool -> Map.<String, Object>of(
+                        "name", tool.getName(),
+                        "description", tool.getDescription(),
+                        "riskLevel", tool.getRiskLevel().name(),
+                        "inputSchema", tool.getInputSchema()))
                 .toList();
     }
 

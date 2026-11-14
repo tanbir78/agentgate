@@ -11,9 +11,11 @@ import java.util.UUID;
 public interface ToolStore {
     ToolDefinition save(ToolDefinition tool);
     Optional<ToolDefinition> findById(UUID id);
+    Optional<ToolDefinition> findByIdAndActiveTrue(UUID id);
     Optional<ToolDefinition> findByName(String name);
     boolean existsByName(String name);
     Page<ToolDefinition> findAll(Pageable pageable);
     Page<ToolDefinition> findByActiveTrue(Pageable pageable);
     List<ToolDefinition> findByActiveTrueOrderByNameAsc();
 }
+
