@@ -17,6 +17,7 @@ public record AgentGateProperties(
         @NotBlank String issuer,
         @NotBlank String adminUsername,
         @NotBlank String adminPassword,
+        @NotBlank String adminIdentity,
         @Min(1) int policyRefreshSeconds,
         @Min(1) int approvalDefaultExpiryMinutes,
         @Min(1) int accessTokenMinutes) {

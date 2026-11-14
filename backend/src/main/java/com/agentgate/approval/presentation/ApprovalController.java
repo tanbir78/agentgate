@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -37,8 +38,11 @@ public class ApprovalController {
             @PathVariable UUID id,
             @Valid @RequestBody(required = false) DecisionRequest request,
             Authentication authentication) {
-        return service.approve(
+
+        ApprovalResponse response = service.approve(
                 id, authentication.getName(), request == null ? null : request.reason());
+
+        return requireNonExpired(response);
     }
 
     @PostMapping("/{id}/reject")
@@ -46,7 +50,18 @@ public class ApprovalController {
             @PathVariable UUID id,
             @Valid @RequestBody(required = false) DecisionRequest request,
             Authentication authentication) {
-        return service.reject(
+
+        ApprovalResponse response = service.reject(
                 id, authentication.getName(), request == null ? null : request.reason());
+
+        return requireNonExpired(response);
+    }
+
+    private ApprovalResponse requireNonExpired(ApprovalResponse response) {
+        if (response.status() == ApprovalStatus.EXPIRED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Approval request has expired.");
+        }
+        return response;
     }
 }

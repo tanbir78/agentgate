@@ -12,7 +12,7 @@ class DelegationIdentityResolverTest {
             "base64-private-key-placeholder",
             "base64-public-key-placeholder",
             "delegation-secret-value-that-is-at-least-32-characters",
-            "http://localhost:8080", "admin", "admin-password", 5, 30, 15));
+            "http://localhost:8080", "admin", "admin-password", "admin@example.test", 5, 30, 15));
 
     @Test
     void acceptsAValidSignedDelegation() {

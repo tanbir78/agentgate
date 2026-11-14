@@ -69,6 +69,7 @@ agentgate:
   issuer: ${AGENTGATE_ISSUER:http://localhost:8080}
   admin-username: ${ADMIN_USERNAME:admin}
   admin-password: ${ADMIN_PASSWORD}
+  admin-identity: ${ADMIN_IDENTITY}
   policy-refresh-seconds: 5
   approval-default-expiry-minutes: 30
   access-token-minutes: 15

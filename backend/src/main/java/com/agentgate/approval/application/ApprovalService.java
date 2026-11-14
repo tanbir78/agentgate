@@ -51,6 +51,12 @@ public class ApprovalService {
             throw new IllegalArgumentException("Approval identity fields are required.");
         }
 
+        if (endUserId == null || endUserId.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Verified requester identity is required for approval requests.");
+        }
+
         Map<String, Object> safeArguments =
                 arguments == null ? Map.of() : arguments;
 
@@ -87,6 +93,7 @@ public class ApprovalService {
     @Transactional
     public ApprovalResponse approve(UUID id, String approver, String reason) {
         ApprovalRequest request = findForDecision(id);
+        enforceFourEyes(request, approver, "SELF_APPROVAL_BLOCKED");
 
         try {
             request.approve(approver, reason);
@@ -96,6 +103,11 @@ public class ApprovalService {
         }
 
         ApprovalRequest saved = repository.save(request);
+
+        if (saved.getStatus() == ApprovalStatus.EXPIRED) {
+            recordExpired(saved);
+            return toResponse(saved);
+        }
 
         auditService.record(
                 approver,
@@ -112,6 +124,7 @@ public class ApprovalService {
     @Transactional
     public ApprovalResponse reject(UUID id, String approver, String reason) {
         ApprovalRequest request = findForDecision(id);
+        enforceFourEyes(request, approver, "SELF_REJECTION_BLOCKED");
 
         try {
             request.reject(approver, reason);
@@ -121,6 +134,11 @@ public class ApprovalService {
         }
 
         ApprovalRequest saved = repository.save(request);
+
+        if (saved.getStatus() == ApprovalStatus.EXPIRED) {
+            recordExpired(saved);
+            return toResponse(saved);
+        }
 
         auditService.record(
                 approver,
@@ -132,6 +150,55 @@ public class ApprovalService {
         );
 
         return toResponse(saved);
+    }
+
+    private void enforceFourEyes(
+            ApprovalRequest request,
+            String approver,
+            String blockedDecision) {
+
+        String requester = request.getEndUserId();
+
+        if (requester == null || requester.isBlank()) {
+            auditService.recordIndependent(
+                    approver,
+                    request.getAgentId(),
+                    request.getToolId(),
+                    "REQUESTER_IDENTITY_MISSING",
+                    request.getPolicyRuleId().toString(),
+                    "Decision blocked because requester identity is missing: " + request.getId()
+            );
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Cannot decide an approval without a verified requester identity.");
+        }
+
+        if (requester.equals(properties.adminIdentity())) {
+            auditService.recordIndependent(
+                    approver,
+                    request.getAgentId(),
+                    request.getToolId(),
+                    blockedDecision,
+                    request.getPolicyRuleId().toString(),
+                    "Four-Eyes Principle blocked self-decision: " + request.getId()
+            );
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "The requester cannot approve or reject their own request.");
+        }
+    }
+
+    private void recordExpired(ApprovalRequest request) {
+        auditService.record(
+                "SYSTEM",
+                request.getAgentId(),
+                request.getToolId(),
+                "EXPIRED",
+                request.getPolicyRuleId().toString(),
+                "Approval request expired: " + request.getId()
+        );
     }
 
     private ApprovalRequest findForDecision(UUID id) {

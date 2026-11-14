@@ -59,6 +59,12 @@ public class ToolExecutionService {
         toolService.validateArguments(tool, arguments);
         PolicyDecisionProvider.PolicyDecision decision = policyDecisionProvider.evaluate(agentClientId, verifiedEndUserId, tool, arguments);
         if (decision.decision() == PolicyDecisionProvider.Decision.APPROVAL_REQUIRED) {
+            if (verifiedEndUserId == null || verifiedEndUserId.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Verified requester identity is required for approval requests.");
+            }
+
             UUID ruleId;
             try {
                 ruleId = UUID.fromString(decision.ruleId());
