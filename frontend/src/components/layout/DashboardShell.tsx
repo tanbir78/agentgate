@@ -1,8 +1,8 @@
 ﻿"use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   Bell,
@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { useTheme } from "@/components/layout/ThemeProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const navigation = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
@@ -155,7 +156,17 @@ export default function DashboardShell({
 }) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) return null;
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -252,5 +263,6 @@ export default function DashboardShell({
     </div>
   );
 }
+
 
 

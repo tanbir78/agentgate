@@ -1,9 +1,21 @@
-import type { NextConfig } from "next";
+﻿import type { NextConfig } from "next";
+
+const backendUrl =
+  process.env.AGENTGATE_BACKEND_URL ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
+      },
+    ];
+  },
+
   turbopack: {
     rules: {
       "*.css": {
