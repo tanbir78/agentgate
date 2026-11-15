@@ -62,7 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(`Authentication failed. Server returned ${response.status}.`);
     }
 
-    const data: { headerName: string; token: string } = await response.json();
+    const data: { headerName: string; token: string } =
+      await response.json();
 
     if (!data.headerName || !data.token) {
       throw new Error("The server did not return a valid CSRF token.");
@@ -87,8 +88,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers.set("Authorization", auth.authorization);
       headers.set("Accept", "application/json");
 
+      let csrfToken = auth.csrfToken;
+      let csrfHeaderName = auth.csrfHeaderName;
+
+      // Refresh the CSRF token before every state-changing request.
       if (!["GET", "HEAD", "OPTIONS", "TRACE"].includes(method)) {
-        headers.set(auth.csrfHeaderName, auth.csrfToken);
+        const csrfResponse = await fetch("/api/v1/csrf", {
+          method: "GET",
+          headers: {
+            Authorization: auth.authorization,
+            Accept: "application/json",
+          },
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+
+        if (!csrfResponse.ok) {
+          if (csrfResponse.status === 401) {
+            setAuth(null);
+            throw new Error("Your authentication has expired. Please log in again.");
+          }
+
+          throw new Error(
+            `Unable to refresh CSRF token (${csrfResponse.status}).`
+          );
+        }
+
+        const csrfData: { headerName: string; token: string } =
+          await csrfResponse.json();
+
+        if (!csrfData.headerName || !csrfData.token) {
+          throw new Error("Invalid CSRF token response.");
+        }
+
+        csrfToken = csrfData.token;
+        csrfHeaderName = csrfData.headerName;
+
+        setAuth((current) =>
+          current
+            ? {
+                ...current,
+                csrfToken,
+                csrfHeaderName,
+              }
+            : null
+        );
+
+        headers.set(csrfHeaderName, csrfToken);
       }
 
       const response = await fetch(path, {
@@ -102,6 +148,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.status === 401) {
         setAuth(null);
         throw new Error("Your authentication has expired. Please log in again.");
+      }
+
+      if (response.status === 403) {
+        const message = await response.clone().text();
+        throw new Error(
+          `Access forbidden (403). Check ADMIN permission or CSRF validation. ${message}`
+        );
       }
 
       return response;
