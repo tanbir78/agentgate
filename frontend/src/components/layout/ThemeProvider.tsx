@@ -1,4 +1,5 @@
-﻿"use client";
+﻿
+"use client";
 
 import {
   createContext,
@@ -19,7 +20,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Default theme: Light
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("agentgate-theme");
@@ -36,7 +37,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Toggle between Light and Dark
   const toggleTheme = () => {
-    setTheme((current) => (current === "light" ? "dark" : "light"));
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
   };
 
   return (
@@ -55,3 +56,4 @@ export function useTheme() {
 
   return context;
 }
+

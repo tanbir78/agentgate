@@ -8,8 +8,16 @@ export default function AuditLogsPage() {
         title="Audit Logs"
         description="Review security decisions and recorded system events."
         section="audit"
-        features={["Security event history", "Actor information", "Policy decisions", "Audit event details"]}
+        features={[
+          "Security event history",
+          "Actor information",
+          "Policy decisions",
+          "Audit event details",
+        ]}
       />
     </DashboardShell>
   );
 }
+
+
+

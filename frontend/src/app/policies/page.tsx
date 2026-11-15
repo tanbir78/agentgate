@@ -1,4 +1,5 @@
-﻿import DashboardShell from "@/components/layout/DashboardShell";
+﻿
+import DashboardShell from "@/components/layout/DashboardShell";
 import FeaturePage from "@/components/ui/FeaturePage";
 
 export default function PoliciesPage() {
@@ -8,7 +9,12 @@ export default function PoliciesPage() {
         title="Policies"
         description="Configure governance rules and access decisions."
         section="policies"
-        features={["Create policies", "Configure policy rules", "Activate policies", "Manage ALLOW and DENY decisions"]}
+        features={[
+          "Create policies",
+          "Configure policy rules",
+          "Activate policies",
+          "Manage ALLOW and DENY decisions",
+        ]}
       />
     </DashboardShell>
   );

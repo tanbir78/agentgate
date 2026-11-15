@@ -8,8 +8,14 @@ export default function ApprovalsPage() {
         title="Approvals"
         description="Review and manage sensitive tool execution requests."
         section="approvals"
-        features={["Pending requests", "Approve requests", "Reject requests", "Approval history"]}
+        features={[
+          "Pending requests",
+          "Approve requests",
+          "Reject requests",
+          "Approval history",
+        ]}
       />
     </DashboardShell>
   );
 }
+

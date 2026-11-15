@@ -1,38 +1,109 @@
-﻿@import "tailwindcss";
+
+@import "tailwindcss";
+
+/* =========================================
+   AGENTGATE — DARK THEME
+========================================= */
 
 :root {
   color-scheme: dark;
-  --background: #090e19;
-  --surface: #101827;
-  --surface-elevated: #151f30;
-  --surface-hover: #1b293b;
-  --foreground: #edf2f7;
-  --muted: #8995a8;
-  --border: #253247;
-  --primary: #10b981;
-  --primary-hover: #059669;
-  --primary-soft: rgba(16, 185, 129, 0.12);
-  --danger: #f87171;
-  --warning: #fbbf24;
-  --success: #34d399;
+
+  --background: #080F1E;
+  --surface: #101B2D;
+  --surface-elevated: #16243A;
+  --surface-hover: #1D3049;
+
+  --foreground: #F1F5F9;
+  --muted: #94A3B8;
+  --border: #293B55;
+
+  /* Primary */
+  --primary: #10D6A0;
+  --primary-hover: #00B985;
+  --primary-soft: rgba(16, 214, 160, 0.13);
+
+  /* Status */
+  --danger: #FB7185;
+  --warning: #FBBF24;
+  --success: #34D399;
+  --info: #38BDF8;
+
+  /* Accent Colors */
+  --accent-blue: #60A5FA;
+  --accent-violet: #A78BFA;
+  --accent-orange: #FB923C;
+  --accent-rose: #FB7185;
+  --accent-cyan: #22D3EE;
+  --accent-indigo: #818CF8;
+
+  /* Soft Backgrounds */
+  --soft-blue: rgba(96, 165, 250, 0.13);
+  --soft-violet: rgba(167, 139, 250, 0.13);
+  --soft-orange: rgba(251, 146, 60, 0.13);
+  --soft-rose: rgba(251, 113, 133, 0.13);
+  --soft-cyan: rgba(34, 211, 238, 0.13);
+
+  /* Effects */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.20);
+  --shadow-glow: 0 0 20px rgba(16, 214, 160, 0.12);
+
+  --ring: rgba(16, 214, 160, 0.35);
 }
+
+/* =========================================
+   AGENTGATE — LIGHT THEME
+========================================= */
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --background: #f5f7fb;
-  --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --surface-hover: #f0f4f8;
-  --foreground: #172033;
-  --muted: #68758a;
-  --border: #e3e8ef;
-  --primary: #059669;
+
+  --background: #F3F6FC;
+  --surface: #FFFFFF;
+  --surface-elevated: #F8FAFF;
+  --surface-hover: #EEF3FA;
+
+  --foreground: #172554;
+  --muted: #64748B;
+  --border: #DCE5F1;
+
+  /* Primary */
+  --primary: #059B75;
   --primary-hover: #047857;
-  --primary-soft: rgba(5, 150, 105, 0.09);
-  --danger: #dc2626;
-  --warning: #d97706;
+  --primary-soft: rgba(5, 155, 117, 0.10);
+
+  /* Status */
+  --danger: #E11D48;
+  --warning: #D97706;
   --success: #059669;
+  --info: #0284C7;
+
+  /* Accent Colors */
+  --accent-blue: #2563EB;
+  --accent-violet: #7C3AED;
+  --accent-orange: #EA580C;
+  --accent-rose: #E11D48;
+  --accent-cyan: #0891B2;
+  --accent-indigo: #4F46E5;
+
+  /* Soft Backgrounds */
+  --soft-blue: rgba(37, 99, 235, 0.09);
+  --soft-violet: rgba(124, 58, 237, 0.09);
+  --soft-orange: rgba(234, 88, 12, 0.09);
+  --soft-rose: rgba(225, 29, 72, 0.09);
+  --soft-cyan: rgba(8, 145, 178, 0.09);
+
+  /* Effects */
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.07);
+  --shadow-glow: 0 0 20px rgba(5, 155, 117, 0.08);
+
+  --ring: rgba(5, 155, 117, 0.25);
 }
+
+/* =========================================
+   TAILWIND THEME
+========================================= */
 
 @theme inline {
   --color-background: var(--background);
@@ -41,25 +112,51 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* =========================================
+   GLOBAL STYLES
+========================================= */
+
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 html {
   min-height: 100%;
   background: var(--background);
+  scroll-behavior: smooth;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  background: var(--background);
+
+  background:
+    radial-gradient(
+      ellipse at 85% 0%,
+      var(--primary-soft),
+      transparent 32%
+    ),
+    radial-gradient(
+      ellipse at 0% 100%,
+      var(--soft-blue),
+      transparent 35%
+    ),
+    var(--background);
+
   color: var(--foreground);
+
   font-family: Arial, Helvetica, sans-serif;
+
   transition:
     background-color 180ms ease,
     color 180ms ease;
 }
+
+/* =========================================
+   INTERACTIONS
+========================================= */
 
 button,
 a,
@@ -76,7 +173,28 @@ button {
   color: var(--foreground);
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+/* =========================================
+   THEME TRANSITIONS
+========================================= */
+
+body,
+aside,
+header,
+main,
+section,
+article,
+button,
+input,
+textarea,
+select {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
 }
