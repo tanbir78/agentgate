@@ -10,6 +10,8 @@ import java.util.UUID;
 
 public interface PolicyRepository extends JpaRepository<Policy, UUID> {
 
+    List<Policy> findAllByOrderByCreatedAtDesc();
+
     Optional<Policy> findByPolicyKeyAndStatus(
             String policyKey,
             PolicyStatus status

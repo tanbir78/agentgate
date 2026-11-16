@@ -1,6 +1,9 @@
 package com.agentgate.audit.application;
 
 import com.agentgate.audit.domain.AuditEvent;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +41,11 @@ public class AuditService {
             String explanation) {
 
         store.save(createEvent(actor, agent, tool, decision, rule, explanation));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuditEvent> list(Pageable pageable) {
+        return store.findAll(pageable);
     }
 
     private AuditEvent createEvent(

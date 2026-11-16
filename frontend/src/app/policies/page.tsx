@@ -1,21 +1,10 @@
-﻿
 import DashboardShell from "@/components/layout/DashboardShell";
-import FeaturePage from "@/components/ui/FeaturePage";
+import PolicyManagement from "@/components/dashboard/PolicyManagement";
 
 export default function PoliciesPage() {
   return (
     <DashboardShell>
-      <FeaturePage
-        title="Policies"
-        description="Configure governance rules and access decisions."
-        section="policies"
-        features={[
-          "Create policies",
-          "Configure policy rules",
-          "Activate policies",
-          "Manage ALLOW and DENY decisions",
-        ]}
-      />
+      <PolicyManagement />
     </DashboardShell>
   );
 }

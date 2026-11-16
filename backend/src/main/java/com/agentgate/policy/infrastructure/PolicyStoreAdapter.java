@@ -47,6 +47,11 @@ public class PolicyStoreAdapter implements PolicyStore {
     }
 
     @Override
+    public List<Policy> findAllPolicies() {
+        return repository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Override
     public boolean existsByPolicyKeyAndVersion(String policyKey, int version) {
         return repository.existsByPolicyKeyAndVersion(policyKey, version);
     }

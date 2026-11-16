@@ -1,0 +1,511 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  Activity, Bot, Wrench, ShieldCheck, Clock3,
+  CheckCircle2, ShieldX, RefreshCw, AlertCircle,
+} from "lucide-react";
+import {
+  Area, AreaChart, CartesianGrid, ResponsiveContainer,
+  Tooltip, XAxis, YAxis,
+} from "recharts";
+import { useAuth } from "@/components/auth/AuthProvider";
+
+type ApiStatus = "connected" | "error" | "loading";
+
+type AuditEvent = {
+  id?: string;
+  occurredAt?: string;
+  actorId?: string;
+  agentId?: string;
+  toolId?: string;
+  decision?: string;
+  ruleId?: string;
+  explanation?: string;
+};
+
+type DashboardData = {
+  agents: number;
+  tools: number;
+  policies: number;
+  approvals: number;
+  auditEvents: AuditEvent[];
+};
+
+const emptyData: DashboardData = {
+  agents: 0,
+  tools: 0,
+  policies: 0,
+  approvals: 0,
+  auditEvents: [],
+};
+
+function getItems(data: any): any[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.content)) return data.content;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+}
+
+function getTotal(data: any): number {
+  if (typeof data?.totalElements === "number") return data.totalElements;
+  if (typeof data?.total === "number") return data.total;
+  return getItems(data).length;
+}
+
+function isActivePolicy(policy: any): boolean {
+  return policy?.active === true ||
+    String(policy?.status ?? "").toUpperCase() === "ACTIVE";
+}
+
+function isAllowed(decision?: string): boolean {
+  const value = String(decision ?? "").toUpperCase();
+  return value.includes("ALLOW") || value === "APPROVED";
+}
+
+function isDenied(decision?: string): boolean {
+  const value = String(decision ?? "").toUpperCase();
+  return value.includes("DENY") || value.includes("BLOCK");
+}
+
+function formatTime(value?: string): string {
+  if (!value) return "Time unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Time unavailable";
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function buildChart(events: AuditEvent[]) {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+
+    return {
+      date,
+      day: date.toLocaleDateString("en", { weekday: "short" }),
+      allowed: 0,
+      denied: 0,
+    };
+  });
+
+  events.forEach((event) => {
+    if (!event.occurredAt) return;
+
+    const eventDate = new Date(event.occurredAt);
+    if (Number.isNaN(eventDate.getTime())) return;
+
+    const day = days.find(
+      (item) => item.date.toDateString() === eventDate.toDateString()
+    );
+
+    if (!day) return;
+    if (isAllowed(event.decision)) day.allowed += 1;
+    if (isDenied(event.decision)) day.denied += 1;
+  });
+
+  return days.map(({ day, allowed, denied }) => ({
+    day,
+    allowed,
+    denied,
+  }));
+}
+
+export default function DashboardOverview() {
+  const { apiFetch } = useAuth();
+
+  const [data, setData] = useState<DashboardData>(emptyData);
+  const [statuses, setStatuses] = useState<Record<string, ApiStatus>>({
+    agents: "loading",
+    tools: "loading",
+    policies: "loading",
+    approvals: "loading",
+    audit: "loading",
+  });
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState("");
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+
+    const endpoints = [
+      { key: "agents", url: "/api/v1/agents?page=0&size=1&sort=createdAt,desc" },
+      { key: "tools", url: "/api/v1/tools?activeOnly=false&page=0&size=1&sort=createdAt,desc" },
+      { key: "policies", url: "/api/v1/policies" },
+      { key: "approvals", url: "/api/v1/approvals?status=PENDING" },
+      { key: "audit", url: "/api/v1/audit-logs?page=0&size=100&sort=occurredAt,desc" },
+    ];
+
+    const results = await Promise.all(
+      endpoints.map(async (endpoint) => {
+        try {
+          const response = await apiFetch(endpoint.url);
+
+          if (!response.ok) {
+            throw new Error("API request failed: " + response.status);
+          }
+
+          return {
+            key: endpoint.key,
+            value: await response.json(),
+            status: "connected" as ApiStatus,
+          };
+        } catch (error) {
+          console.error("Dashboard API error:", endpoint.key, error);
+          return {
+            key: endpoint.key,
+            value: null,
+            status: "error" as ApiStatus,
+          };
+        }
+      })
+    );
+
+    const values: Record<string, any> = {};
+    const nextStatuses: Record<string, ApiStatus> = {};
+
+    results.forEach((result) => {
+      values[result.key] = result.value;
+      nextStatuses[result.key] = result.status;
+    });
+
+    const policies = getItems(values.policies);
+    const approvalItems = getItems(values.approvals);
+    const auditItems = getItems(values.audit) as AuditEvent[];
+
+    setData({
+      agents: values.agents ? getTotal(values.agents) : 0,
+      tools: values.tools ? getTotal(values.tools) : 0,
+      policies: policies.filter(isActivePolicy).length,
+      approvals: approvalItems.length,
+      auditEvents: auditItems,
+    });
+
+    setStatuses(nextStatuses);
+    setLastUpdated(new Date().toLocaleTimeString());
+    setLoading(false);
+  }, [apiFetch]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  const chartData = buildChart(data.auditEvents);
+
+  const stats = [
+    {
+      title: "Registered Agents",
+      value: data.agents,
+      description: "Total agents in database",
+      icon: Bot,
+      color: "#10D6A0",
+      status: statuses.agents,
+    },
+    {
+      title: "Registered Tools",
+      value: data.tools,
+      description: "Total registered tools",
+      icon: Wrench,
+      color: "#60A5FA",
+      status: statuses.tools,
+    },
+    {
+      title: "Active Policies",
+      value: data.policies,
+      description: "Policies currently active",
+      icon: ShieldCheck,
+      color: "#A78BFA",
+      status: statuses.policies,
+    },
+    {
+      title: "Pending Approvals",
+      value: data.approvals,
+      description: "Awaiting approval decision",
+      icon: Clock3,
+      color: "#FB923C",
+      status: statuses.approvals,
+    },
+  ];
+
+  const services = [
+    { name: "Agents API", status: statuses.agents },
+    { name: "Tools API", status: statuses.tools },
+    { name: "Policies API", status: statuses.policies },
+    { name: "Approvals API", status: statuses.approvals },
+    { name: "Audit Read API", status: statuses.audit },
+  ];
+
+  const connectedCount = services.filter(
+    (service) => service.status === "connected"
+  ).length;
+
+  const recentEvents = [...data.auditEvents]
+    .sort((a, b) =>
+      new Date(b.occurredAt ?? 0).getTime() -
+      new Date(a.occurredAt ?? 0).getTime()
+    )
+    .slice(0, 5);
+
+  return (
+    <div className="mx-auto max-w-[1500px] space-y-7">
+      <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--primary)]" />
+            <span className="text-[10px] font-bold uppercase tracking-[2px] text-[var(--primary)]">
+              Security overview
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Dashboard Overview
+          </h1>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Live records retrieved from the AgentGate backend.
+          </p>
+        </div>
+
+        <button
+          onClick={loadDashboard}
+          disabled={loading}
+          className="flex items-center gap-2 self-start rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs font-semibold transition hover:border-[var(--primary)]/40 disabled:opacity-50 sm:self-auto"
+        >
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          {loading ? "Refreshing..." : "Refresh data"}
+        </button>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+
+          return (
+            <div
+              key={stat.title}
+              className="group relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-1 hover:border-[var(--primary)]/30"
+            >
+              <div
+                className="absolute inset-x-0 top-0 h-1"
+                style={{ background: `linear-gradient(90deg, ${stat.color}, transparent)` }}
+              />
+              <div className="flex items-start justify-between">
+                <div
+                  className="flex h-11 w-11 items-center justify-center rounded-xl"
+                  style={{
+                    backgroundColor: `${stat.color}18`,
+                    color: stat.color,
+                  }}
+                >
+                  <Icon size={21} />
+                </div>
+                <span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${
+                  stat.status === "connected"
+                    ? "bg-[var(--success)]/10 text-[var(--success)]"
+                    : "bg-[var(--warning)]/10 text-[var(--warning)]"
+                }`}>
+                  {stat.status === "connected" ? "LIVE" : "UNAVAILABLE"}
+                </span>
+              </div>
+              <p className="mt-5 text-xs font-medium text-[var(--muted)]">
+                {stat.title}
+              </p>
+              <h3 className="mt-1 text-3xl font-bold tracking-tight">
+                {loading ? "..." : stat.status === "connected" ? stat.value : "—"}
+              </h3>
+              <p className="mt-2 text-[10px] text-[var(--muted)]">
+                {stat.status === "connected"
+                  ? stat.description
+                  : "Could not retrieve data from API"}
+              </p>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)] sm:p-6 xl:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold">Security Activity</h2>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Actual allowed and denied audit events over the last 7 days
+              </p>
+            </div>
+            <div className="flex gap-4 text-[10px] text-[var(--muted)]">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[var(--primary)]" />
+                Allowed
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[var(--danger)]" />
+                Denied
+              </span>
+            </div>
+          </div>
+
+          {statuses.audit !== "connected" ? (
+            <div className="mt-6 flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] text-center">
+              <AlertCircle size={25} className="text-[var(--warning)]" />
+              <p className="mt-3 text-sm font-semibold">Audit API unavailable</p>
+              <p className="mt-1 max-w-md text-xs text-[var(--muted)]">
+                The audit event endpoint could not be reached. The chart will
+                appear when the API is available.
+              </p>
+            </div>
+          ) : data.auditEvents.length === 0 ? (
+            <div className="mt-6 flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-[var(--border)] text-sm text-[var(--muted)]">
+              No audit events found yet.
+            </div>
+          ) : (
+            <div className="mt-7 h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="allowedGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10D6A0" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10D6A0" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="deniedGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#FB7185" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#FB7185" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 5" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 11 }} axisLine={false} tickLine={false} width={35} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--surface-elevated)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      color: "var(--foreground)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area type="monotone" dataKey="allowed" name="Allowed" stroke="#10D6A0" strokeWidth={2.5} fill="url(#allowedGradient)" />
+                  <Area type="monotone" dataKey="denied" name="Denied" stroke="#FB7185" strokeWidth={2} fill="url(#deniedGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)] sm:p-6">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={18} className="text-[var(--primary)]" />
+            <h2 className="text-sm font-semibold">Backend Integration</h2>
+          </div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Live API connection status
+          </p>
+
+          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4">
+            <p className="text-2xl font-bold">
+              {connectedCount}/{services.length}
+            </p>
+            <p className="mt-1 text-[10px] text-[var(--muted)]">
+              APIs responding successfully
+            </p>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {services.map((service) => (
+              <div key={service.name} className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium">{service.name}</span>
+                <span className={`rounded-lg px-2 py-1 text-[9px] font-bold ${
+                  service.status === "connected"
+                    ? "bg-[var(--success)]/10 text-[var(--success)]"
+                    : service.status === "loading"
+                      ? "bg-[var(--warning)]/10 text-[var(--warning)]"
+                      : "bg-[var(--danger)]/10 text-[var(--danger)]"
+                }`}>
+                  {service.status === "connected"
+                    ? "CONNECTED"
+                    : service.status === "loading"
+                      ? "CHECKING"
+                      : "UNAVAILABLE"}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {lastUpdated && (
+            <p className="mt-6 border-t border-[var(--border)] pt-4 text-[10px] text-[var(--muted)]">
+              Last updated: {lastUpdated}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
+        <div className="border-b border-[var(--border)] px-5 py-5 sm:px-6">
+          <h2 className="text-sm font-semibold">Recent Security Activity</h2>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Latest events recorded by the audit service
+          </p>
+        </div>
+
+        {statuses.audit !== "connected" ? (
+          <div className="p-8 text-center text-xs text-[var(--muted)]">
+            Audit read API is unavailable.
+          </div>
+        ) : recentEvents.length === 0 ? (
+          <div className="p-8 text-center text-xs text-[var(--muted)]">
+            No recent audit events found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[650px] text-left">
+              <thead>
+                <tr className="border-b border-[var(--border)] bg-[var(--surface-elevated)] text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                  <th className="px-6 py-4 font-semibold">Event</th>
+                  <th className="px-6 py-4 font-semibold">Agent / Tool</th>
+                  <th className="px-6 py-4 font-semibold">Time</th>
+                  <th className="px-6 py-4 font-semibold">Decision</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentEvents.map((event, index) => {
+                  const allowed = isAllowed(event.decision);
+                  const denied = isDenied(event.decision);
+
+                  return (
+                    <tr
+                      key={event.id ?? `${event.occurredAt}-${index}`}
+                      className="border-b border-[var(--border)]/70 last:border-0 hover:bg-[var(--surface-hover)]"
+                    >
+                      <td className="px-6 py-4 text-xs font-semibold">
+                        {event.explanation || "Security policy evaluation"}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-[var(--muted)]">
+                        {event.agentId || "—"} / {event.toolId || "—"}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-[var(--muted)]">
+                        {formatTime(event.occurredAt)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-bold ${
+                          allowed
+                            ? "border-[var(--success)]/20 bg-[var(--success)]/10 text-[var(--success)]"
+                            : denied
+                              ? "border-[var(--danger)]/20 bg-[var(--danger)]/10 text-[var(--danger)]"
+                              : "border-[var(--warning)]/20 bg-[var(--warning)]/10 text-[var(--warning)]"
+                        }`}>
+                          {allowed ? <CheckCircle2 size={12} /> : denied ? <ShieldX size={12} /> : <Clock3 size={12} />}
+                          {event.decision || "RECORDED"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

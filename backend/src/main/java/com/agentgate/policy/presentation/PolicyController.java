@@ -24,6 +24,11 @@ public class PolicyController {
         this.policyService = policyService;
     }
 
+    @GetMapping
+    public List<PolicyResponse> listPolicies() {
+        return policyService.listPolicies();
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PolicyResponse createPolicy(

@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -143,13 +143,20 @@ function Sidebar({
           Settings
         </Link>
 
-        <button className="group flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-[13px] font-medium text-[var(--muted)] transition-all duration-300 hover:border-[var(--border)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]">
-          <CircleHelp
-            size={18}
-            className="transition-transform duration-300 group-hover:scale-110 group-hover:text-[var(--accent-blue)]"
-          />
-          Help & Support
-        </button>
+        <Link
+  href="/help-support"
+  className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-[13px] font-medium transition-all duration-300 ${
+    pathname === "/help-support"
+      ? "border-[var(--primary)]/30 bg-[var(--primary-soft)] text-[var(--primary)]"
+      : "border-transparent text-[var(--muted)] hover:border-[var(--border)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+  }`}
+>
+  <CircleHelp
+    size={18}
+    className="transition-transform duration-300 group-hover:scale-110"
+  />
+  Help & Support
+</Link>
       </div>
 
       {/* Bottom Section */}
@@ -263,8 +270,10 @@ export default function DashboardShell({
                 <span className="text-[var(--border)]">/</span>
 
                 <span className="rounded-lg bg-[var(--primary-soft)] px-2.5 py-1 font-semibold text-[var(--primary)]">
-                  {navigation.find((item) => item.href === pathname)?.label ??
-                    "Settings"}
+                  {pathname === "/help-support"
+                    ? "Help & Support"
+                    : navigation.find((item) => item.href === pathname)?.label ??
+                      "Settings"}
                 </span>
               </div>
 

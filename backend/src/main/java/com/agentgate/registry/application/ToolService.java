@@ -1,6 +1,8 @@
 package com.agentgate.registry.application;
 
 import com.agentgate.registry.domain.*;
+import com.agentgate.audit.application.AuditService;
+import com.agentgate.audit.application.AuditActorProvider;
 
 import tools.jackson.databind.json.JsonMapper;
 import org.springframework.data.domain.Page;
@@ -9,47 +11,91 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import static com.agentgate.registry.application.ToolDtos.*;
 
 @Service
 public class ToolService {
+
     private final ToolStore repository;
     private final ToolSchemaValidator schemaValidator;
     private final JsonMapper jsonMapper;
+    private final AuditService auditService;
+    private final AuditActorProvider auditActorProvider;
 
-    public ToolService(ToolStore repository, ToolSchemaValidator schemaValidator, JsonMapper jsonMapper) {
+    public ToolService(
+            ToolStore repository,
+            ToolSchemaValidator schemaValidator,
+            JsonMapper jsonMapper,
+            AuditService auditService,
+            AuditActorProvider auditActorProvider) {
+
         this.repository = repository;
         this.schemaValidator = schemaValidator;
         this.jsonMapper = jsonMapper;
+        this.auditService = auditService;
+        this.auditActorProvider = auditActorProvider;
     }
 
     @Transactional
     public ToolResponse create(CreateToolRequest request) {
+
         if (repository.existsByName(request.name())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tool name already exists");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Tool name already exists");
         }
+
         validateEndpoint(request.endpointUrl());
         schemaValidator.parseSchema(request.inputSchema());
+
         String method = request.transportType() == ToolTransport.REST
-                ? normalizeMethod(request.httpMethod()) : null;
-        ToolDefinition tool = new ToolDefinition(request.name(), request.description(), request.transportType(),
-                request.riskLevel(), request.ownerTeam(), request.endpointUrl(), method, schemaAsMap(request.inputSchema()));
-        return toResponse(repository.save(tool));
+                ? normalizeMethod(request.httpMethod())
+                : null;
+
+        ToolDefinition tool = new ToolDefinition(
+                request.name(),
+                request.description(),
+                request.transportType(),
+                request.riskLevel(),
+                request.ownerTeam(),
+                request.endpointUrl(),
+                method,
+                schemaAsMap(request.inputSchema()));
+
+        ToolDefinition savedTool = repository.save(tool);
+
+        auditService.record(
+                auditActorProvider.currentActor(),
+                null,
+                savedTool.getId(),
+                "TOOL_CREATED",
+                null,
+                "Tool created: " + savedTool.getName());
+
+        return toResponse(savedTool);
     }
 
     @Transactional(readOnly = true)
     public Page<ToolResponse> list(Pageable pageable, boolean activeOnly) {
-        Page<ToolDefinition> page = activeOnly ? repository.findByActiveTrue(pageable) : repository.findAll(pageable);
+        Page<ToolDefinition> page = activeOnly
+                ? repository.findByActiveTrue(pageable)
+                : repository.findAll(pageable);
+
         return page.map(this::toResponse);
     }
 
     @Transactional(readOnly = true)
     public List<ToolResponse> listActive() {
-        return repository.findByActiveTrueOrderByNameAsc().stream().map(this::toResponse).toList();
+        return repository.findByActiveTrueOrderByNameAsc()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     /** Returns active domain entities for internal policy and gateway decisions. */
@@ -61,81 +107,190 @@ public class ToolService {
     @Transactional(readOnly = true)
     public ToolDefinition findByName(String name) {
         return repository.findByName(name)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tool not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Tool not found"));
     }
 
     @Transactional(readOnly = true)
     public ToolDefinition require(UUID id) {
         return repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tool not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Tool not found"));
     }
 
     @Transactional
     public ToolResponse update(UUID id, UpdateToolRequest request) {
+
         ToolDefinition tool = require(id);
+
         validateEndpoint(request.endpointUrl());
         schemaValidator.parseSchema(request.inputSchema());
-        String method = tool.getTransportType() == ToolTransport.REST ? normalizeMethod(request.httpMethod()) : null;
-        tool.update(request.description(), request.riskLevel(), request.ownerTeam(),
-                request.endpointUrl(), method, schemaAsMap(request.inputSchema()), request.active());
+
+        String method = tool.getTransportType() == ToolTransport.REST
+                ? normalizeMethod(request.httpMethod())
+                : null;
+
+        tool.update(
+                request.description(),
+                request.riskLevel(),
+                request.ownerTeam(),
+                request.endpointUrl(),
+                method,
+                schemaAsMap(request.inputSchema()),
+                request.active());
+
+        auditService.record(
+                auditActorProvider.currentActor(),
+                null,
+                tool.getId(),
+                "TOOL_UPDATED",
+                null,
+                "Tool updated: " + tool.getName());
+
         return toResponse(tool);
     }
 
     @Transactional
     public void deactivate(UUID id) {
+
         ToolDefinition tool = require(id);
-        tool.update(tool.getDescription(), tool.getRiskLevel(), tool.getOwnerTeam(),
-                tool.getEndpointUrl(), tool.getHttpMethod(), tool.getInputSchema(), false);
+
+        tool.update(
+                tool.getDescription(),
+                tool.getRiskLevel(),
+                tool.getOwnerTeam(),
+                tool.getEndpointUrl(),
+                tool.getHttpMethod(),
+                tool.getInputSchema(),
+                false);
+
+        auditService.record(
+                auditActorProvider.currentActor(),
+                null,
+                tool.getId(),
+                "TOOL_DEACTIVATED",
+                null,
+                "Tool deactivated: " + tool.getName());
     }
 
     @Transactional
-    public ToolResponse saveImported(String name, String description, String ownerTeam,
-                                     String endpointUrl, String method, String schema) {
-        if (repository.existsByName(name)) return repository.findByName(name).map(this::toResponse).orElseThrow();
+    public ToolResponse saveImported(
+            String name,
+            String description,
+            String ownerTeam,
+            String endpointUrl,
+            String method,
+            String schema) {
+
+        if (repository.existsByName(name)) {
+            return repository.findByName(name)
+                    .map(this::toResponse)
+                    .orElseThrow();
+        }
+
         validateEndpoint(endpointUrl);
         schemaValidator.parseSchema(schema);
-        ToolDefinition tool = new ToolDefinition(name, description, ToolTransport.REST, RiskLevel.LOW,
-                ownerTeam, endpointUrl, normalizeMethod(method), schemaAsMap(schema));
-        return toResponse(repository.save(tool));
+
+        ToolDefinition tool = new ToolDefinition(
+                name,
+                description,
+                ToolTransport.REST,
+                RiskLevel.LOW,
+                ownerTeam,
+                endpointUrl,
+                normalizeMethod(method),
+                schemaAsMap(schema));
+
+        ToolDefinition savedTool = repository.save(tool);
+
+        auditService.record(
+                auditActorProvider.currentActor(),
+                null,
+                savedTool.getId(),
+                "TOOL_IMPORTED",
+                null,
+                "Tool imported: " + savedTool.getName());
+
+        return toResponse(savedTool);
     }
 
-    public void validateArguments(ToolDefinition tool, Map<String, Object> arguments) {
-        schemaValidator.validateArguments(schemaJson(tool.getInputSchema()), arguments);
-    }
+    public void validateArguments(
+            ToolDefinition tool,
+            Map<String, Object> arguments) {
 
+        schemaValidator.validateArguments(
+                schemaJson(tool.getInputSchema()),
+                arguments);
+    }
 
     private void validateEndpoint(String endpoint) {
         try {
             URI uri = URI.create(endpoint);
-            if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme()))
+
+            if (!"http".equalsIgnoreCase(uri.getScheme())
+                    && !"https".equalsIgnoreCase(uri.getScheme())) {
                 throw new IllegalArgumentException();
-            if (uri.getHost() == null) throw new IllegalArgumentException();
+            }
+
+            if (uri.getHost() == null) {
+                throw new IllegalArgumentException();
+            }
+
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint must be a valid HTTP(S) URL");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Endpoint must be a valid HTTP(S) URL");
         }
     }
 
     private String normalizeMethod(String method) {
-        String value = (method == null || method.isBlank()) ? "POST" : method.toUpperCase();
-        if (!List.of("GET", "POST", "PUT", "PATCH", "DELETE").contains(value)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported HTTP method");
+        String value = (method == null || method.isBlank())
+                ? "POST"
+                : method.toUpperCase();
+
+        if (!List.of("GET", "POST", "PUT", "PATCH", "DELETE")
+                .contains(value)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unsupported HTTP method");
         }
+
         return value;
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> schemaAsMap(String schema) {
-        return (Map<String, Object>) jsonMapper.convertValue(schemaValidator.parseSchema(schema), Map.class);
+        return (Map<String, Object>) jsonMapper.convertValue(
+                schemaValidator.parseSchema(schema),
+                Map.class);
     }
 
     private String schemaJson(Map<String, Object> schema) {
-        try { return jsonMapper.writeValueAsString(schema); }
-        catch (Exception exception) { throw new IllegalStateException("Unable to serialize tool schema", exception); }
+        try {
+            return jsonMapper.writeValueAsString(schema);
+        } catch (Exception exception) {
+            throw new IllegalStateException(
+                    "Unable to serialize tool schema",
+                    exception);
+        }
     }
 
     private ToolResponse toResponse(ToolDefinition tool) {
-        return new ToolResponse(tool.getId(), tool.getName(), tool.getDescription(), tool.getTransportType(),
-                tool.getRiskLevel(), tool.getOwnerTeam(), tool.getEndpointUrl(), tool.getHttpMethod(),
-                schemaJson(tool.getInputSchema()), tool.isActive(), tool.getHealthStatus(), tool.getCreatedAt(), tool.getUpdatedAt());
+        return new ToolResponse(
+                tool.getId(),
+                tool.getName(),
+                tool.getDescription(),
+                tool.getTransportType(),
+                tool.getRiskLevel(),
+                tool.getOwnerTeam(),
+                tool.getEndpointUrl(),
+                tool.getHttpMethod(),
+                schemaJson(tool.getInputSchema()),
+                tool.isActive(),
+                tool.getHealthStatus(),
+                tool.getCreatedAt(),
+                tool.getUpdatedAt());
     }
 }

@@ -1,0 +1,141 @@
+package com.agentgate.registry.application;
+
+import com.agentgate.registry.domain.*;
+
+import tools.jackson.databind.json.JsonMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import static com.agentgate.registry.application.ToolDtos.*;
+
+@Service
+public class ToolService {
+    private final ToolStore repository;
+    private final ToolSchemaValidator schemaValidator;
+    private final JsonMapper jsonMapper;
+
+    public ToolService(ToolStore repository, ToolSchemaValidator schemaValidator, JsonMapper jsonMapper) {
+        this.repository = repository;
+        this.schemaValidator = schemaValidator;
+        this.jsonMapper = jsonMapper;
+    }
+
+    @Transactional
+    public ToolResponse create(CreateToolRequest request) {
+        if (repository.existsByName(request.name())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tool name already exists");
+        }
+        validateEndpoint(request.endpointUrl());
+        schemaValidator.parseSchema(request.inputSchema());
+        String method = request.transportType() == ToolTransport.REST
+                ? normalizeMethod(request.httpMethod()) : null;
+        ToolDefinition tool = new ToolDefinition(request.name(), request.description(), request.transportType(),
+                request.riskLevel(), request.ownerTeam(), request.endpointUrl(), method, schemaAsMap(request.inputSchema()));
+        return toResponse(repository.save(tool));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ToolResponse> list(Pageable pageable, boolean activeOnly) {
+        Page<ToolDefinition> page = activeOnly ? repository.findByActiveTrue(pageable) : repository.findAll(pageable);
+        return page.map(this::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ToolResponse> listActive() {
+        return repository.findByActiveTrueOrderByNameAsc().stream().map(this::toResponse).toList();
+    }
+
+    /** Returns active domain entities for internal policy and gateway decisions. */
+    @Transactional(readOnly = true)
+    public List<ToolDefinition> listActiveDefinitions() {
+        return repository.findByActiveTrueOrderByNameAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public ToolDefinition findByName(String name) {
+        return repository.findByName(name)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tool not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public ToolDefinition require(UUID id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tool not found"));
+    }
+
+    @Transactional
+    public ToolResponse update(UUID id, UpdateToolRequest request) {
+        ToolDefinition tool = require(id);
+        validateEndpoint(request.endpointUrl());
+        schemaValidator.parseSchema(request.inputSchema());
+        String method = tool.getTransportType() == ToolTransport.REST ? normalizeMethod(request.httpMethod()) : null;
+        tool.update(request.description(), request.riskLevel(), request.ownerTeam(),
+                request.endpointUrl(), method, schemaAsMap(request.inputSchema()), request.active());
+        return toResponse(tool);
+    }
+
+    @Transactional
+    public void deactivate(UUID id) {
+        ToolDefinition tool = require(id);
+        tool.update(tool.getDescription(), tool.getRiskLevel(), tool.getOwnerTeam(),
+                tool.getEndpointUrl(), tool.getHttpMethod(), tool.getInputSchema(), false);
+    }
+
+    @Transactional
+    public ToolResponse saveImported(String name, String description, String ownerTeam,
+                                     String endpointUrl, String method, String schema) {
+        if (repository.existsByName(name)) return repository.findByName(name).map(this::toResponse).orElseThrow();
+        validateEndpoint(endpointUrl);
+        schemaValidator.parseSchema(schema);
+        ToolDefinition tool = new ToolDefinition(name, description, ToolTransport.REST, RiskLevel.LOW,
+                ownerTeam, endpointUrl, normalizeMethod(method), schemaAsMap(schema));
+        return toResponse(repository.save(tool));
+    }
+
+    public void validateArguments(ToolDefinition tool, Map<String, Object> arguments) {
+        schemaValidator.validateArguments(schemaJson(tool.getInputSchema()), arguments);
+    }
+
+
+    private void validateEndpoint(String endpoint) {
+        try {
+            URI uri = URI.create(endpoint);
+            if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme()))
+                throw new IllegalArgumentException();
+            if (uri.getHost() == null) throw new IllegalArgumentException();
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint must be a valid HTTP(S) URL");
+        }
+    }
+
+    private String normalizeMethod(String method) {
+        String value = (method == null || method.isBlank()) ? "POST" : method.toUpperCase();
+        if (!List.of("GET", "POST", "PUT", "PATCH", "DELETE").contains(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported HTTP method");
+        }
+        return value;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> schemaAsMap(String schema) {
+        return (Map<String, Object>) jsonMapper.convertValue(schemaValidator.parseSchema(schema), Map.class);
+    }
+
+    private String schemaJson(Map<String, Object> schema) {
+        try { return jsonMapper.writeValueAsString(schema); }
+        catch (Exception exception) { throw new IllegalStateException("Unable to serialize tool schema", exception); }
+    }
+
+    private ToolResponse toResponse(ToolDefinition tool) {
+        return new ToolResponse(tool.getId(), tool.getName(), tool.getDescription(), tool.getTransportType(),
+                tool.getRiskLevel(), tool.getOwnerTeam(), tool.getEndpointUrl(), tool.getHttpMethod(),
+                schemaJson(tool.getInputSchema()), tool.isActive(), tool.getHealthStatus(), tool.getCreatedAt(), tool.getUpdatedAt());
+    }
+}

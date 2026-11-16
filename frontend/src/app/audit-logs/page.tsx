@@ -1,23 +1,10 @@
-﻿import DashboardShell from "@/components/layout/DashboardShell";
-import FeaturePage from "@/components/ui/FeaturePage";
+import DashboardShell from "@/components/layout/DashboardShell";
+import AuditLogManagement from "@/components/dashboard/AuditLogManagement";
 
 export default function AuditLogsPage() {
   return (
     <DashboardShell>
-      <FeaturePage
-        title="Audit Logs"
-        description="Review security decisions and recorded system events."
-        section="audit"
-        features={[
-          "Security event history",
-          "Actor information",
-          "Policy decisions",
-          "Audit event details",
-        ]}
-      />
+      <AuditLogManagement />
     </DashboardShell>
   );
 }
-
-
-

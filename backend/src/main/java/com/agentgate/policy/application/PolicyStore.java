@@ -22,5 +22,7 @@ public interface PolicyStore {
 
     List<Policy> findAllActivePolicies();
 
+    List<Policy> findAllPolicies();
+
     boolean existsByPolicyKeyAndVersion(String policyKey, int version);
 }
